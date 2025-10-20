@@ -1,0 +1,28 @@
+# Defines the identity (ServiceAccount) your app pod will use
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: task-executor-sa
+---
+# Defines the permissions (Role) needed: create, get, watch, delete pods
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-manager-role
+rules:
+- apiGroups: [""] # "" refers to the core Kubernetes API group
+  resources: ["pods", "pods/log"]
+  verbs: ["create", "get", "list", "watch", "delete"]
+---
+# Binds the permissions to the identity (RoleBinding)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pod-manager-binding
+subjects:
+- kind: ServiceAccount
+  name: task-executor-sa
+roleRef:
+  kind: Role
+  name: pod-manager-role
+  apiGroup: rbac.authorization.k8s.io

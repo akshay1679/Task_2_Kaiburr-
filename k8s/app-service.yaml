@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kaiburr-app-service
+spec:
+  # NodePort makes the service accessible on a static port on the cluster's node IP
+  type: NodePort
+  selector:
+    # This connects the service to the pods created by your deployment (matching the label)
+    app: kaiburr-app
+  ports:
+  - protocol: TCP
+    port: 8080       # Port inside the cluster
+    targetPort: 8080   # Port on your application's pod

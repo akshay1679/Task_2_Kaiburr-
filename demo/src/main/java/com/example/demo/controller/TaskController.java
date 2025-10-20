@@ -4,21 +4,15 @@ import com.example.demo.model.Task;
 import com.example.demo.model.TaskExecution;
 import com.example.demo.repository.TaskRepository;
 import com.example.demo.service.TaskService;
+import com.example.demo.service.KubernetesService; // <-- 1. IMPORT THE NEW SERVICE
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.List;
-
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.http.ResponseEntity;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/tasks")
@@ -29,7 +23,10 @@ public class TaskController {
     private TaskRepository repo;
 
     @Autowired
-    private TaskService taskService;
+    private TaskService taskService; // You still need this for command validation
+
+    @Autowired
+    private KubernetesService kubernetesService; // <-- 2. INJECT THE NEW SERVICE
 
     @GetMapping
     public List<Task> all() {
@@ -50,6 +47,7 @@ public class TaskController {
 
     @PutMapping
     public Task upsert(@RequestBody Task task) {
+        // Still a good idea to validate commands before saving them
         if (!taskService.isValidCommand(task.getCommand())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsafe or unsupported command");
         }
@@ -61,37 +59,30 @@ public class TaskController {
         repo.deleteById(id);
     }
 
+    /**
+     * THIS IS THE MODIFIED ENDPOINT FOR TASK 2
+     * It now uses the KubernetesService to execute the command.
+     */
     @PutMapping("/{id}/execute")
     public TaskExecution execute(@PathVariable String id) throws Exception {
         Task t = repo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        // Optional: You can re-validate here if you want
         if (!taskService.isValidCommand(t.getCommand())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsafe or unsupported command");
         }
 
-        TaskExecution exec = taskService.runCommand(t.getCommand(), 10); // 10s timeout
+        TaskExecution exec = new TaskExecution();
+        exec.setStartTime(Instant.now());
+
+        // 3. CALL THE NEW SERVICE instead of the old one
+        String commandOutput = kubernetesService.executeCommandInPod(t.getCommand());
+        exec.setOutput(commandOutput);
+        exec.setEndTime(Instant.now());
+
+        // Add the new execution record to the task and save it
         t.getTaskExecutions().add(exec);
         repo.save(t);
         return exec;
     }
-    @PostMapping("/{id}/execute")
-    public ResponseEntity<String> executeTask(@PathVariable String id) {
-    Optional<Task> taskOptional = repo.findById(id);
-    if (taskOptional.isPresent()) {
-        Task task = taskOptional.get();
-        try {
-            Process process = new ProcessBuilder("cmd.exe", "/c", task.getCommand())
-        .redirectErrorStream(true)
-        .start();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String output = reader.lines().collect(Collectors.joining("\n"));
-            process.waitFor();
-            return ResponseEntity.ok("Executed: " + output);
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Execution failed: " + e.getMessage());
-        }
-    } else {
-        return ResponseEntity.status(404).body("Task not found");
-    }
-}
-
 }
