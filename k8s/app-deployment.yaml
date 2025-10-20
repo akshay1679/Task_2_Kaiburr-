@@ -17,7 +17,7 @@ spec:
       containers:
       - name: kaiburr-app
         # IMPORTANT: Change this to your Docker Hub username and image name
-        image: your-docker-username/kaiburr-task-app:latest
+        image: akshay1679/kaiburr-task-app:latest
         imagePullPolicy: IfNotPresent # Use this if you loaded the image locally to minikube
         ports:
         - containerPort: 8080
